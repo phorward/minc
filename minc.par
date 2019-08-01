@@ -1,0 +1,481 @@
+#!model				context-sensitive;
+
+#parser 			"MinC" ;
+#version			"0.8" ;
+#copyright 			"Copyright (C) 2008 by Phorward Software Technologies" ;
+#description		"A research compiler project" ;
+
+#whitespaces		@whitespace ;
+
+@whitespace			' \t\r\n' | "//" !'\n'*
+					;
+
+/* Todo:	Unary Minus, Unary Not */
+#left				"||" ;
+#left				"&&" ;
+#left				"==" "!=" ">=" "<=" '>' '<'	;
+#left				"<<" ">>" ;
+#left				'+' '-' ;
+#left				'*' '/' '%' ;
+#left				'|' ;
+#left				'&' '^' ;
+
+#default action			[* @@ = @1; *] ;
+#default epsilon action	[* memset( &@@, 0, sizeof( @@ ) ); *] ;
+
+#prologue
+[*
+
+/*
+ * Includes
+ */
+#include "minc.h"
+#include "proto.h"
+
+/*
+ * Globals
+ */
+static int 		cur_dt			= -1;
+static int		cur_local_addr;
+static symbol*	cur_scope		= (symbol*)NULL;
+symbol*			global_scope	= (symbol*)NULL;
+
+/*
+ * Internal typedefs
+ */
+typedef struct
+{
+	int	jmp;
+	int vars;
+} else_info;
+
+#define WITHDEBUG 0
+*] ;
+
+#epilogue	[* *];
+
+//Grammar start --------------------------------------------------------------
+
+program$			->	decl_global? main_body?	[*	print_prog(); *]
+					;
+
+//Declarations ---------------------------------------------------------------
+
+decl_global<symbol*>
+					->	global_decl				[*	global_scope = @1; *]
+					;
+
+global_decl<symbol*>
+					->	mixed_decl
+					|	global_decl mixed_decl	[*	@@ = scope_append( @1, @2 );
+												*]
+					;
+
+
+mixed_decl<symbol*>	->	var_decl_global
+					// Todo: func_decl
+					;
+
+
+decl_local<symbol*>	->	set_local_addr
+							local_decl			[*	@@ = cur_scope = @2;
+												*]
+					|
+					;
+
+local_decl<symbol*>	->	var_decl_local
+					| local_decl var_decl_local	[*	@@ = scope_append( @1, @2 );
+												*]
+					;
+
+var_decl_global
+	<symbol*>		->	dt_spec
+							var_list_global ';' [*	@@ = @2; *]
+
+					;
+
+var_list_global
+	<symbol*>		->	var_init_global
+					| 	var_list_global ','
+							var_init_global		[*	@@ = scope_append( @1, @3 );												*]
+					;
+
+var_init_global
+	<symbol*>		->	var var_const_assign	[*	symbol* sym;
+
+													sym = new_symbol(
+														@1, SYM_VAR );
+
+													sym->data_type = cur_dt;
+													sym->size = dt_size( 
+														sym->data_type );
+													sym->init_val = @2;
+
+													add_symbol( sym );
+
+													@@ = sym;
+												*]
+					;
+
+var_const_assign<value*>
+					->	'=' const_expr			[* @@ = memdup( (void*)&@2,
+														sizeof( @2 ) ); *]
+					|							[* @@ = (value*)NULL; *]
+					;
+
+var_decl_local
+	<symbol*>		->	dt_spec
+							var_list_local ';'	[*	@@ = @2; *]
+
+					;
+
+var_list_local<symbol*>
+					->	var_init_local
+					| 	var_list_local ','
+							var_init_local		[*	@@ = scope_append( @1, @3 );
+												*]
+					;
+
+var_init_local<symbol*>
+					->	var var_assign			[*	@@ = new_symbol( 
+															@1, SYM_VAR_L );
+
+													@@->data_type = cur_dt;
+													@@->offset = cur_local_addr;
+													@@->size = dt_size(
+														@@->data_type );
+
+													cur_local_addr += @@->size;
+													
+													add_symbol( @@ );
+
+													if( @2 > -1 )
+													{
+														promote_gen(
+															STORE_LOCAL,
+															(char*)@@->offset,
+															@@->data_type,
+																@2 );
+													}
+												*]
+					;
+
+var_assign<short>	->	'=' expr				[*	@@ = @2; *]
+					|							[*	@@ = -1; *]
+					;
+
+dt_spec<short>		->	"int"					[* 	@@ = cur_dt = DT_INT; *]
+					|	"string"				[*	@@ = cur_dt = DT_STRING; *]
+					/*|	"float"					[*	@@ = cur_dt = DT_FLOAT; *]*/
+					;
+
+//Body -----------------------------------------------------------------------
+
+main_body			->	tmp_nop statement		[*	mcode*	alloc;
+													if( @2 )
+													{
+														alloc = get_address(
+																	@1 );
+														alloc->cmd = GET;
+														alloc->param.address
+															= @2;
+
+														gen( UNGET, (char*)@2 );
+													}
+												*]
+					;
+
+body<int>			->  '{'	save_scope decl_local
+								statements? '}'	[*	@@ = scope_size( @3 ) + @4;
+													free_scope( @3 );
+													cur_scope = @2;
+												*]
+					;
+
+statements<int>		->	statement
+					|	statements statement	[*	if( @2 > @1 )
+														@@ = @2;
+													else
+														@@ = @1;
+												*]
+					;
+
+opt_else<else_info>	->	"else" tmp_nop
+							statement			[*	@@.jmp = @2;
+													@@.vars = @3;
+												*]
+					|							[*	@@.jmp = -1;
+													@@.vars = 0;
+												*]
+					;
+
+statement<int>		-> 	"if" '(' expr ')'
+							tmp_nop:branch statement:stmt
+								opt_else:else
+												[*	mcode* jmp;
+
+													jmp = get_address(
+															@branch );
+													jmp->cmd = JUMP_FALSE;
+
+													if( @else.jmp > -1 )
+													{
+														jmp->param.address =
+															@else.jmp + 1;
+
+														jmp = get_address(
+																@else.jmp );
+														jmp->cmd = JUMP;
+													}
+
+													jmp->param.address =
+															next_address();
+
+													@@ = @stmt + @else.vars;
+												*]
+					|	next_address:start
+						"while"	'(' expr ')'
+							tmp_nop:jmp
+								statement		[*	mcode*	jmp;
+
+													gen( JUMP, (char*)@start );
+
+													jmp = get_address( @jmp );
+													jmp->cmd = JUMP_FALSE;
+													jmp->param.address =
+														next_address();
+
+													@@ = @7;
+												*]
+					|	next_address:start
+						"do" statement "while"
+							'(' expr ')' ';'	[*	gen( JUMP_TRUE,
+															(char*)@start );
+
+													@@ = @3;
+												*]
+					|	"switch" '(' expr ')'	
+							statement			[*	@@ = @5; *]
+					|	assign ';'				[*	@@ = 0; *]
+					|	body					[*	@@ = @1; *]
+					| 	';'						[*	@@ = 0; *]
+					;
+
+assign				-> 	var_sym '=' expr		[*	if( @1 )
+													{
+														if( @1->sym_type ==
+																SYM_VAR )
+														{
+															promote_gen( 
+																STORE,
+																(char*)@1,
+																@1->data_type,
+																	@3 );
+														}
+														else
+														{
+															promote_gen(
+																STORE_LOCAL,
+																(char*)
+																	@1->offset,
+																@1->data_type,
+																	@3 );
+														}
+													}
+												*]
+					| 	expr					[* *]
+					;
+
+// Expressions ---------------------------------------------------------------
+
+expr<short>			->	expr "==" expr			[*	@@ = promote_gen( EQU,
+														NONE, @1, @3 ); *]
+					|	expr "!=" expr			[*	@@ = promote_gen( NOT_EQU,
+														NONE, @1, @3 ); *]
+					|	expr ">=" expr			[*	@@ = promote_gen(
+														GREATER_EQUAL,
+														NONE, @1, @3 ); *]
+					|	expr "<=" expr			[*	@@ = promote_gen(
+														LOWER_EQUAL,
+														NONE, @1, @3 ); *]
+					|	expr "||" expr			[*	@@ = promote_gen( 
+														LOG_OR,
+														NONE, @1, @3 ); *]
+					|	expr "&&" expr			[*	@@ = promote_gen( LOG_AND,
+														NONE, @1, @3 ); *]
+					|	expr "<<" expr			[*	@@ = promote_gen( 
+														SHIFT_LEFT,
+															NONE, @1, @3 ); *]
+					|	expr ">>" expr			[*	@@ = promote_gen( 
+														SHIFT_RIGHT,
+															NONE, @1, @3 ); *]
+					|	expr '>' expr			[*	@@ = promote_gen( GREATER,
+														NONE, @1, @3 ); *]
+					|	expr '<' expr			[*	@@ = promote_gen( LOWER,
+														NONE, @1, @3 ); *]
+					| 	expr '+' expr			[*	@@ = promote_gen( ADD,
+														NONE, @1, @3 ); *]
+					|	expr '-' expr			[*	@@ = promote_gen( SUB,
+														NONE, @1, @3 ); *]
+					|	expr '*' expr			[*	@@ = promote_gen( MUL,
+														NONE, @1, @3 ); *]
+					|	expr '/' expr			[*	@@ = promote_gen( DIV,
+														NONE, @1, @3 ); *]
+					|	expr '%' expr			[*	@@ = promote_gen( MOD,
+														NONE, @1, @3 ); *]
+					|	expr '|' expr			[*	@@ = promote_gen( OR,
+														NONE, @1, @3 ); *]
+					|	expr '&' expr			[*	@@ = promote_gen( AND,
+														NONE, @1, @3 ); *]
+					|	expr '^' expr			[*	@@ = promote_gen( XOR,
+														NONE, @1, @3 ); *]
+					|	'(' expr ')'			[*	@@ = @2; *]
+					|	factor
+					;
+
+factor<short>		->	const					[*	gen( CONST, (char*)&@1 );
+													@@ = @1.type;
+												*]
+					|	var_sym					[*	if( @1 )
+													{
+														if( @1->sym_type ==
+																SYM_VAR )
+														{
+															gen( LOAD,
+																(char*)@1 );
+														}
+														else
+														{
+															gen( LOAD_LOCAL,
+															(char*)@1->offset
+																);
+														}
+	
+														@@ = @1->data_type;
+													}
+												*]
+					;
+
+const<value>		->	const_int
+					/*|	const_float*/
+					|	const_str
+					;
+
+// Constant Expressions (to be evaluated at compile-time!) -------------------
+
+/*
+const_expr			->	const_expr "==" const_expr
+					|	const_expr "!=" const_expr
+					|	const_expr ">=" const_expr
+					|	const_expr "<=" const_expr
+					|	const_expr "||" const_expr
+					|	const_expr "&&" const_expr
+					|	const_expr '>' const_expr
+					|	const_expr '<' const_expr
+					|	const_expr '+' const_expr
+					|	const_expr '-' const_expr
+					|	const_expr '*' const_expr
+					|	const_expr '/' const_expr
+					|	const_expr '%' const_expr
+					|	const_expr '|' const_expr
+					|	const_expr '&' const_expr
+					|	const_expr '^' const_expr
+					|	'(' const_expr ')'
+					|	const_factor
+					;
+*/
+
+//TEMP:
+const_expr<value>	-> const_factor
+					;
+
+const_factor<value>	->	const_int
+					/*|	const_float*/
+					|	const_str
+					;
+
+// Atomics -------------------------------------------------------------------
+
+@integer<int>		'0-9'+					[*	char	tmp[64+1];
+												sprintf( tmp, "%.*s", 
+													((int)(@< - @>) > 64 ? 64
+													: (int)(@< - @>) ), @> );
+												@@ = atoi( tmp );
+											*]
+					;
+
+@float<float>		'0-9'+ '.' '0-9'*
+					| '0-9'* '.' '0-9'+		[*	char	tmp[64+1];
+												sprintf( tmp, "%.*s", 
+													((int)(@< - @>) > 64 ? 64
+													: (int)(@< - @>) ), @> );
+												@@ = atof( tmp );
+											*]
+					;
+					
+@string<uchar*>		'"' ( !'"' | '"' '"' )* '"'
+											[*	int size = (int)(@< - @>);
+												@@ = (uchar*)MALLOC(
+														( size - 1 ) *
+															sizeof( uchar ) );
+												sprintf( @@, "%.*s",
+													size - 2, @> + 1 );
+											*]
+					;
+
+
+@identifier<uchar*>	'A-Za-z_' 'A-Za-z0-9_'*	[*	int size = (int)(@< - @>);
+												@@ = (uchar*)MALLOC(
+														( size + 1 )
+													* sizeof( uchar ) );
+
+												sprintf( @@, "%.*s",
+													size, @> );
+											*]
+					;
+
+const_int<value>	->	@integer		[*	@@.type = DT_INT;
+											@@.value._int = @1; *]
+					;
+
+const_float<value>	->	@float			[*	@@.type = DT_FLOAT;
+											@@.value._float = @1; *]
+					;
+
+const_str<value>	->	@string			[*	@@.type = DT_STRING;
+											@@.value._string =
+												put_string( @1 ); *]
+					;
+
+var_sym<symbol*>	->	var				[*	@@ = find_symbol( @1 );
+											
+											if( !@@ )
+												error( ERR_POS,
+													"Call to undefined "
+														"symbol: %s", @1 );
+
+											FREE( @1 );
+										*]
+					;
+
+var<uchar*>			->	@identifier		[*	@@ = @1; *]
+					;
+
+// Helper symbols for compiler implementation - Not grammar specific! ---------
+
+set_local_addr		->							[*	cur_local_addr = 
+														scope_size( cur_scope );
+												*]
+					;
+
+save_scope<symbol*>	->							[*	@@ = cur_scope; *]
+					;
+
+tmp_nop<int>		->							[*	@@ = gen( NOP, NONE );
+												*]
+					;
+
+next_address<int>	->							[*	@@ = next_address();
+												*]
+					;
+

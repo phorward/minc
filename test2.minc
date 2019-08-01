@@ -1,0 +1,19 @@
+string n ="Hallo :D";
+int a = 23;
+int b = 42;
+{
+	int x = 10;
+	string y = "ello";
+
+	x = 10 * 2;
+
+	if( x < 10 )
+		y = "Hello" ;
+	else if( x >= 10 )
+		y = "Bello" ;
+	else
+	{
+		string y;
+		y = "World";	
+	}
+}

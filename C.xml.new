@@ -1,0 +1,713 @@
+<?xml version="1.0" standalone="yes"?>
+<!--
+UniCC LALR(1) Parser Generator
+Copyright (C) 2006-2008 by Phorward Software Technologies, Jan Max Meyer
+http://www.phorward-software.com ++ mail@phorward-software.com
+
+File:	C.xml
+Author:	Jan Max Meyer
+Usage:	Target language template for the C programming language
+
+This template should serve as a general description/reference of how
+templates for the UniCC parser generator are written. I know that some
+things could be done better, but I'm in the opinion that it works
+this way. If you don't like it, make it better, improve it!
+UniCC for President - This software is just a fine thing, doing its job
+more than well :D
+
+Just for the protocol: The placeholder @@prefix holds the prefix which is
+possibly defined for a grammar. You can use @@prefix everywhere!
+-->
+
+<generator name="C">
+	<!--
+	***********************************************************************************************
+	Escape sequences
+	***********************************************************************************************
+	These are the escapable sequence definitions for the target language
+	which should be replaced when terminal-/nonterminal (especially generated
+	ones) names are generated into the target file, e.g. in the <symbols>-tag.
+	-->
+	<escape-sequence for="\" do="\\" />
+	<escape-sequence for="&#x22;" do="\&#x22;" />
+	
+	<!--
+	***********************************************************************************************
+	Value-stack related definitions
+	***********************************************************************************************
+	-->
+
+	<!-- Default (return) value type for nonterminals -->
+	<vstack_def_type>int</vstack_def_type>
+	<!-- Default value type for character-class terminals -->
+	<vstack_term_type>int</vstack_term_type>
+	
+	<!--
+	Code to be generated for the value stack datatype-definition when only one datatype is used
+	within the whole grammar (or if always the default-type is used).
+	
+	Placeholders:		@@value-type			- 	Expands to the type-declaration of the only
+													used value type.
+	-->
+	<vstack_single>typedef @@value-type @@prefix_vtype;</vstack_single>
+
+	<!--
+	Begin and end of code to be generated for the value stack datatype-definition when multiple
+	datatypes are used within the whole grammar.
+	Note that you can define here even struct-like code or array-like structure if your target
+	language supports only those.
+	
+	Placeholders:		@@number-of-value-types	-	Expands to the maximum number of value types
+													possible here. Can be used in both of the 
+													following tags.
+	-->
+	<vstack_union_start>typedef union @@prefix_VTYPE&#x0A;{&#x0A;</vstack_union_start>
+	<vstack_union_end>} @@prefix_vtype;&#x0A;&#x0A;</vstack_union_end>
+	
+	<!--
+	This tag defines a data type definition within the union. As @@attribute, the content of the
+	<vstack_union_att>-tag is expanded, which then contains a consecutive number of the datatype.
+	This block is repeated for every value type within the union/whatever ;)
+	
+	Placeholders:		@@value-type			- 	Expands to the type-declaration of the
+													current data type as specified within the
+													grammar.
+						@@attribute				-	As @@attribute, the content of the
+													<vstack_union_att>-tag is expanded, which
+													then contains a consecutive number of the
+													datatype.
+						@@value-type-id			-	The value type ID, which begins at 0.
+													This can be the index of an array!
+	-->
+	<vstack_union_def>&#x09;@@value-type @@attribute;&#x0A;</vstack_union_def>
+	
+	<!--
+	This tag defines is used in several code-generation parts, both when the value stack union
+	is defined and when reduction code for productions is produced.
+	
+	Placeholders:		@@value-type-id			-	The value type ID, which begins at 0.
+													This can be the index of an array!
+	-->
+	<vstack_union_att>value_@@value-type-id</vstack_union_att>
+
+	<!--
+	***********************************************************************************************
+	Reduction-code related definitions
+	***********************************************************************************************
+	-->
+	
+	<!--
+	Begin and end of code to be generated for each reduction code action of a production. This
+	code is embedded to a switch-structure below, every block is a "case" within this switch.
+	<action_start> is generated BEFORE and <action_end> BEHIND each reduction code.
+	
+	Placeholders:		@@production-number		-	The number of the production to be reduced.
+													Can be used in both of the following tags.
+	-->
+	<action_start>&#x09;&#x09;&#x09;&#x09;case @@production-number:&#x09;&#x09;&#x09;&#x09;{&#x0A;&#x09;&#x09;&#x09;&#x09;&#x09;</action_start>
+	<action_end>&#x0A;&#x09;&#x09;&#x09;&#x09;}&#x09;&#x09;&#x09;&#x09;break;&#x0A;&#x0A;</action_end>
+	
+	<!--
+	Single value access when only one datatype is used in the whole grammar.
+	
+	Placeholders:		@@offset				-	The number of the right-hand side symbol to be
+													accessed. This is the number specified in
+													the production reduction code as number or
+													even by the right-hand side element's identi-
+													fier. The offset is inserted here by UniCC's
+													code generator.
+	-->
+	<action_single>(*( vtos - @@offset ))</action_single>
+
+	<!--
+	Multiple value access, in case of different datatypes used within the grammar.
+	
+	Placeholders:		@@offset				-	The number of the right-hand side symbol to be
+													accessed. This is the number specified in
+													the production reduction code as number or
+													even by the right-hand side element's identi-
+													fier. The offset is inserted here by UniCC's
+													code generator.
+						@@attribute				-	As @@attribute, the content of the
+													<vstack_union_att>-tag is expanded, which
+													then contains a consecutive number of the
+													datatype.
+	-->
+	<action_union>(*( vtos - @@offset )).@@attribute</action_union>
+
+	<!--
+	Single value left-hand side assignment variable when only one datatype is used in the whole
+	grammar.
+	
+	Placeholders:		none
+	-->
+	<action_lhs_single>ret</action_lhs_single>
+
+	<!--
+	Multiple value left-hand side assignment variable when different datatypes are used within
+	the whole grammar.
+	
+	Placeholders:		@@attribute				-	As @@attribute, the content of the
+													<vstack_union_att>-tag is expanded, which
+													then contains a consecutive number of the
+													datatype.
+	-->
+	<action_lhs_union>ret.@@attribute</action_lhs_union>
+
+	<!--
+	***********************************************************************************************
+	Regular expression terminal match related definitions
+	***********************************************************************************************
+	-->
+	
+	<!--
+	Begin and end of code to be generated for each match of a regular expression token. This
+	code is embedded to a switch-structure below, every block is a "case" within this switch.
+	<scan_action_start> is generated BEFORE and <scan_action_end> BEHIND each reduction code.
+	The code here is only produced when the matched regex-terminal contains individual code
+	segments.
+	
+	Placeholders:		@@symbol-number			-	The id of the terminal the lexical analyzer
+													action belongs to.
+													Can be used in both of the following tags.
+	-->
+	
+	<scan_action_start>&#x09;&#x09;case @@symbol-number:&#x09;&#x09;{&#x0A;&#x09;&#x09;&#x09;</scan_action_start>
+	<scan_action_end>&#x0A;&#x09;&#x09;}&#x09;&#x09;break;&#x0A;&#x0A;</scan_action_end>
+
+	<!--
+	The content of the tags <scan_action_begin_offset> and <scan_action_end_offset> are
+	inserted in regex-terminal semantic code blocks for the placeholders @> and @< to
+	get the start- and end-offset of the matched string. Normally, these are variable
+	names.
+	
+	Placeholders:		none
+	-->
+	<scan_action_begin_offset>start</scan_action_begin_offset>
+	<scan_action_end_offset>end</scan_action_end_offset>
+
+	<!--
+	When @@ is used in regex-terminal semantic code blocks, a variable that receives
+	the semantic value of the token to be pushed to the value stack must be given.
+	For single value assignments,this is done here. This value is only used when the
+	grammar uses only one datatype.
+	
+	Placeholders:		none
+	-->
+	<scan_action_ret_single>*ret</scan_action_ret_single>
+
+	<!--
+	Same play for multiple value assignments in regex-terminal semantic action blocks.
+	
+	Placeholders:		@@attribute				-	As @@attribute, the content of the
+													<vstack_union_att>-tag is expanded, which
+													then contains a consecutive number of the
+													datatype.
+	-->
+	<scan_action_ret_union>ret->@@attribute</scan_action_ret_union>
+
+	<!--
+	***********************************************************************************************
+	Parse tables
+	***********************************************************************************************
+	-->
+	
+	<!--
+	The <prodlen>-Tag defines an one-dimensional array for the production lengths, which means the
+	number of items on a right-hand side of every production used within the grammar. This is used
+	when a reduction occurs to pop the correct number of items off the parse stack.
+	The Placeholders can only be used in the <col>-tag below <prodlen>.
+	
+	Placeholders:		@@length-of-rhs			-	Number of items on a production's
+													right-hand side.
+						@@production-number		-	The production id number identifying
+													the production. This can be automatically
+													solved via the array index itself. The
+													production number begins at 0.
+	-->
+	<prodlen>
+		<col>@@length-of-rhs</col>
+		<col_sep>, </col_sep>
+	</prodlen>
+
+	<!--
+	The <prodlhs>-Tag defines an one-dimensional array for the id's of the left-hand side each pro-
+	duction belons to. This is used	when a reduction occurs to push the correct left-hand side symbol
+	onto the parse stack. The Placeholders can only be used in the <col>-tag below <prodlhs>.
+	
+	Placeholders:		@@lhs					-	The id-number of the left-hand side symbol
+													the production belons to.
+						@@production-number		-	The production id number identifying
+													the production. This can be automatically
+													solved via the array index itself. The
+													production number begins at 0.
+	-->
+	<prodlhs>
+		<col>@@lhs</col>
+		<col_sep>, </col_sep>
+	</prodlhs>
+
+	<!--
+	The <charmap>-Tag defines an one-dimensional array for the id's of the left-hand side each pro-
+	duction belons to. This is used	when a reduction occurs to push the correct left-hand side symbol
+	onto the parse stack. The Placeholders can only be used in the <col>-tag below <prodlhs>.
+	
+	Placeholders:		@@lhs					-	The id-number of the left-hand side symbol
+													the production belons to.
+						@@production-number		-	The production id number identifying
+													the production. This can be automatically
+													solved via the array index itself. The
+													production number begins at 0.
+	-->
+	<charmap>
+		<col>@@symbol</col>
+		<col_sep>, </col_sep>
+	</charmap>
+	<dfa_select>
+		<col>@@machine</col>
+		<col_sep>, </col_sep>
+	</dfa_select>
+	<dfa_char>
+		<col>@@code</col>
+		<col_sep>, </col_sep>
+	</dfa_char>
+	<dfa_trans>
+		<col>@@goto</col>
+		<col_sep>, </col_sep>
+	</dfa_trans>
+	<acttab>
+		<row_start>&#x09;{ @@number-of-columns</row_start>
+		<row_end> }</row_end>
+		<row_sep>,&#x0A;</row_sep>
+		<col>, @@symbol,@@action,@@index </col>
+		<col_sep></col_sep>
+	</acttab>
+	<gotab>
+		<row_start>&#x09;{ @@number-of-columns</row_start>
+		<row_end> }</row_end>
+		<row_sep>,&#x0A;</row_sep>
+		<col>, @@symbol,@@action,@@index </col>
+		<col_sep></col_sep>
+	</gotab>
+	<dfa_idx>
+		<row_start>&#x09;{ </row_start>
+		<row_end> }</row_end>
+		<row_sep>,&#x0A;</row_sep>
+		<col>@@index</col>
+		<col_sep>, </col_sep>
+	</dfa_idx>
+	<dfa_accept>
+		<row_start>&#x09;{ </row_start>
+		<row_end> }</row_end>
+		<row_sep>,&#x0A;</row_sep>
+		<col>@@accept</col>
+		<col_sep>, </col_sep>
+	</dfa_accept>
+	<kw_invalid_suffix>
+		<col_true>1</col_true>
+		<col_false>0</col_false>
+		<col_sep>, </col_sep>
+	</kw_invalid_suffix>
+	<whitespace>
+		<col_true>1</col_true>
+		<col_false>0</col_false>
+		<col_sep>, </col_sep>
+	</whitespace>
+	<symbols>
+		<col>/* @@symbol */ "@@symbol-name"</col>
+		<col_sep>, </col_sep>
+	</symbols>
+	<driver>/*
+ * Parser:		@@name
+ * Version:		@@version
+ * Copyright:	@@copyright
+ * Description:	@@description
+ *
+ *
+ * Generated by the Phorward LALR(1) Parser Generator
+ * Copyright (C) by Phorward Software Technologies, Jan Max Meyer
+ */
+ 
+#if @@epilogue_len == 0
+#include &lt;stdlib.h&gt;
+#include &lt;stdio.h&gt;
+#else
+@@prologue
+#endif
+
+
+#ifndef WITHDEBUG
+#define WITHDEBUG	0
+#endif
+
+@@value-type-definition
+
+int @@prefix_act[ @@number-of-states ][ @@deepest-action-row * 3 + 1 ] =
+{
+@@action-table
+};
+
+int @@prefix_go[ @@number-of-states ][ @@deepest-goto-row * 3 + 1 ] =
+{
+@@goto-table
+};
+
+int @@prefix_prod_lengths[ @@number-of-productions ] =
+{
+	@@production-lengths
+};
+
+int @@prefix_prod_lhs[ @@number-of-productions ] =
+{
+	@@production-lhs
+};
+
+#if !@@model
+int @@prefix_dfa_select[ @@number-of-states ] =
+{
+	@@dfa-select
+};
+#endif
+
+#if @@number-of-dfa-machines
+int @@prefix_dfa_idx[ @@number-of-dfa-machines ][ @@deepest-dfa-index-row ] =
+{
+@@dfa-index
+};
+
+int @@prefix_dfa_chars[ @@size-of-dfa-characters ] =
+{
+	@@dfa-char
+};
+
+int @@prefix_dfa_trans[ @@size-of-dfa-characters ] =
+{
+	@@dfa-trans
+};
+
+int @@prefix_dfa_accept[ @@number-of-dfa-machines ][ @@deepest-dfa-accept-row ] =
+{
+@@dfa-accept
+};
+
+int @@prefix_kw_invalid_suffixes[ @@character-universe ] =
+{
+@@keyword-invalid-suffixes
+};
+#endif
+
+int @@prefix_char_map[ @@character-universe ] =
+{
+	@@character-map
+};
+
+#if @@number-of-symbols
+int @@prefix_whitespaces[ @@number-of-symbols ] =
+{
+	@@whitespaces
+};
+#endif
+
+char @@prefix_symbol_names[ @@number-of-symbols ][ @@max-symbol-name-length + 1 ] =
+{
+	@@symbols
+};
+
+int @@prefix_get_act_tab( int state, int sym, int* act, int* idx )
+{
+	int i;
+
+	for( i = 1; i &lt;@@prefix_act[state][0] * 3; i += 3 )
+	{
+		if( @@prefix_act[state][i] == sym )
+		{
+			*act = @@prefix_act[state][i+1];
+			*idx = @@prefix_act[state][i+2];
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
+int @@prefix_get_go_tab( int state, int sym, int* act, int* idx )
+{
+	int i;
+
+	for( i = 1; i &lt; @@prefix_go[state][0] * 3; i += 3 )
+	{
+		if( @@prefix_go[state][i] == sym )
+		{
+			*act = @@prefix_go[state][i+1];
+			*idx = @@prefix_go[state][i+2];
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
+#if @@number-of-dfa-machines
+int @@prefix_get_keyword( char* src, int* len, int top, @@prefix_vtype* ret )
+{
+	char*	start = src;
+	char*	end = start;
+	int 	dfa_st	= 0;
+	int		chr;
+	int		sym		= -1;
+#if !@@model
+	int		mach	= @@prefix_dfa_select[ top ];
+#else
+	int		mach	= 0;
+#endif
+	*len = 0;
+
+	do
+	{
+		chr = @@prefix_dfa_idx[ mach ][ dfa_st ];
+
+		dfa_st = -1;
+		while( @@prefix_dfa_chars[ chr ] &gt; -1 )
+		{
+			if( @@prefix_dfa_chars[ chr ] == *( src + *len ) )
+			{
+				dfa_st = *( @@prefix_dfa_trans + chr );
+
+				if( @@prefix_dfa_accept[ mach ][ dfa_st ] &gt; -1 )
+					sym = @@prefix_dfa_accept[ mach ][ dfa_st ];
+
+				(*len)++;
+				break;
+			}
+			chr++;
+		}
+	}
+	while( dfa_st &gt; -1 );
+	
+	
+	if( sym &gt; -1 &amp;&amp; @@prefix_kw_invalid_suffixes[ *( src + *len ) ] )
+		return -1;
+	
+	end += *len;
+	switch( sym )
+	{
+@@scan_actions
+	}
+	
+	return sym;
+}
+#endif
+
+int @@prefix_parse( char* src )
+{
+	int		stack		[ 1024 ];
+	@@prefix_vtype		vstack[ 1024 ];
+	int*	tos			= stack;
+	@@prefix_vtype*		vtos = vstack;
+	@@prefix_vtype		ret;
+	@@prefix_vtype		test;
+	int		act;
+	int		idx;
+	int		sym			= -1;
+	int		len			= 0;
+	int		i;
+	char*	oldsrc		= (char*)NULL;
+
+	*stack = 0;
+	memset( &amp;test, 0, sizeof( @@prefix_vtype ) );
+	memset( vstack, 0, 1024 * sizeof( @@prefix_vtype ) );
+
+	while( 1 )
+	{
+		memset( &amp;ret, 0, sizeof( @@prefix_vtype ) );
+#if !@@model
+		sym = -1;
+		len = 0;
+#else
+		if( sym == -1 )
+		{
+			do
+			{
+				src += len;
+#endif
+#if @@number-of-dfa-machines
+#if !@@model
+				if( @@prefix_dfa_select[ *tos ] &gt; -1 )
+					sym = @@prefix_get_keyword( src, &len, *tos, &ret );
+#else
+				sym = @@prefix_get_keyword( src, &len, 0, &ret );
+#endif
+
+				if( sym == -1 )
+#endif
+				{
+					sym = @@prefix_char_map[ *src ];
+					len = 1;
+				}
+#if @@model
+			}
+			while( sym &gt; -1 && @@prefix_whitespaces[ sym ] );
+		}
+#endif
+
+#if WITHDEBUG
+		{
+			int* x = stack;
+			printf( "\n Stack: " );
+			for( x; x &lt;= tos; x++ )
+				fprintf( stderr, "%d ", *x );
+			printf( "\n Values: " );
+			for( x = vstack; x &lt;= vtos; x++ )
+				fprintf( stderr, "%d ", *x );
+		}
+		printf( "\nsym = %d[%d] *tos = %d act = %d idx = %d src = &gt;%.30s&lt;\n", sym, len, *tos, act, idx, src );
+		/* getchar(); */
+#endif
+
+		if( !@@prefix_get_act_tab( *tos, sym, &act, &idx ) )
+		{
+			fprintf( stderr, "Parse error at \"%.20s\"\nExcuse me, I have no error recovery implemented yet...\n\n", src );
+			break;
+		}
+
+		/* Shift */
+		if( act & 2 )
+		{
+#if WITHDEBUG
+			printf( "Shift\n" );
+#endif
+			tos++;
+			vtos++;
+
+			*tos = ( act & 1 ) ? 0 : idx;
+			
+			if( !memcmp( &amp;ret, &amp;test, sizeof( @@prefix_vtype ) ) )
+				@@top-value = *src;
+			else
+				memcpy( &( @@top-value ), &amp;ret, sizeof( @@prefix_vtype ) );
+
+			src += len;
+			
+			len = 0;
+			sym = -1;
+		}
+
+		/* Reduce */
+		while( act & 1 )
+		{
+#if WITHDEBUG
+			printf( "Reduce %d\n", idx );
+#endif
+			memset( &amp;ret, 0, sizeof( @@prefix_vtype ) );
+
+			switch( idx )
+			{
+@@actions
+			}
+
+			for( i = 0; i &lt; @@prefix_prod_lengths[ idx ]; i++ )
+			{
+#if WITHDEBUG
+				printf( "Popping one off\n" );
+#endif
+				tos--;
+				vtos--;
+			}
+
+			tos++;
+			vtos++;
+
+			if( idx == @@goal-production )
+			{
+				src += len;
+
+				#if WITHDEBUG
+				printf( "\nInput accepted &gt;%s&lt;!\n\n", src );
+				#endif
+				
+				break;
+			}
+
+			@@prefix_get_go_tab( *( tos - 1 ), @@prefix_prod_lhs[ idx ], &act, &idx );
+			*tos = idx;
+			memcpy( vtos, &amp;ret, sizeof( @@prefix_vtype ) );
+
+#if WITHDEBUG
+		{
+			int* x = stack;
+			printf( "\n Stack: " );
+			for( x; x &lt;= tos; x++ )
+				fprintf( stderr, "%d ", *x );
+			printf( "\n Values: " );
+			for( x = vstack; x &lt;= vtos; x++ )
+				fprintf( stderr, "%d ", *x );
+		}
+		printf( "DA BIN ICH SACK!!! *tos = %d act = %d idx = %d src = &gt;%.30s&lt;\n", *tos, act, idx, src );
+		//getchar();
+#endif
+		}
+		
+		if( act & 1 && idx == @@goal-production )
+			break;
+	}
+
+	return 0;
+}
+
+#if @@epilogue_len == 0
+int main( int argc, char** argv )
+{
+	char	s[ 24576+1 ];
+	char	l[ 24576+1 ] ;
+	short 	first;
+	
+	if( @@name_len &gt; 0 && @@version_len &gt; 0 )
+		printf( "@@name v@@version\n" );
+	
+	if( @@copyright_len &gt; 0 )
+		printf( "@@copyright\n\n" );
+		
+	printf( "UniCC LALR(1) Parser Generator ~ Standard Template for C-Parsers\n"
+			"Copyright (C) 2008 by Phorward Software Technologies, Jan Max Meyer\n---\n" );
+	
+	do
+	{
+		first = 0;
+		*s = '\0';
+		
+		printf( "\nok\n" );
+		do
+		{
+			printf( "@@name>" );
+			gets( l );
+		
+			if( !( *l ) )
+			{
+				if( first )
+					break;
+				else
+					first = 1;
+			}
+			else
+				sprintf( s + strlen( s ), "%s\n", l );
+		}
+		while( 1 );
+		
+		//s[ strlen( s ) - 1 ] = '\0';
+		
+		if( !( *s ) )
+			break;
+			
+		/* printf( "Compiling source\n&gt;%s&lt;\n\n~~~\n", s ) ; */
+		@@prefix_parse( s );
+
+	}
+	while( 1 );
+	
+	return 0;
+}
+#else
+@@epilogue
+#endif
+</driver>
+</generator>
