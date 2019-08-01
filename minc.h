@@ -18,9 +18,16 @@ Usage:	General MinC includes
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
-#include <uchar.h>
-#include <dmem.h>
-#include <boolean.h>
+
+typedef unsigned char	uchar;
+
+#define MALLOC	malloc
+#define REALLOC	realloc
+#define FREE	free
+
+#define BOOLEAN	short
+#define TRUE	1
+#define FALSE	0
 
 /*
  * Typedefs

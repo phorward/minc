@@ -43,7 +43,7 @@ int main( int argc, char** argv )
 	}
 
 	printf( "%s\n--\n", src );
-	_parse( src );
+	parse( src );
 	gen_x86( stdout );
 
 	FREE( src );

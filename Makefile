@@ -7,9 +7,6 @@
 # Author:		Jan Max Meyer
 #-------------------------------------------------------------------------------
 
-include		../../include/Make.inc
-
-#PROGRAM		=	$(RUN_DIR)$(PATH_SEP)$(MIN_LALR1)$(EXEEXT)
 PROGRAM		=	minc
 
 PARSER		=	parse.c
@@ -37,8 +34,7 @@ OBJ			=	parse$(OBJEXT) \
 LIBFILES	=	
 
 HEADERS		=	minc.h \
-				proto.h \
-				$(LLIST_LIB_H)
+				proto.h
 
 #-------------------------------------------------------------------------------
 
@@ -47,15 +43,13 @@ all: $(PROGRAM)
 	@echo --- Compilation succeeded! ---
 	
 $(PROGRAM): $(SRC) $(HEADERS) Makefile
-	$(CC) $(CEXEOPTS) $(SRC)
-	$(LLINK) $(LINKOPTS)$@ $(OBJ) $(LIBFILES)
+	$(CC) -o $@ $(SRC)
 
 $(PARSER):	$(PARSER_SRC)
-	$(UNICC) -s -v -w -o $@ $(PARSER_SRC)
+	unicc -svwo parse $(PARSER_SRC)
 
 proto.h:	$(SRC)
-	echo "">$@
-	cproto_all "$(SRC)" $(INCLUDE_DIR) proto.h
+	pproto $(SRC) | sed -e "/int _/d" >$@
 
 clean_obj:
 	-@$(RM) $(OBJ)

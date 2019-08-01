@@ -1,10 +1,11 @@
-#!model				context-sensitive;
+/*
+	MinC version 0.8
+	Copyright (C) 2008 by Phorward Software Technologies
 
-#parser 			"MinC" ;
-#version			"0.8" ;
-#copyright 			"Copyright (C) 2008 by Phorward Software Technologies" ;
-#description		"A research compiler project" ;
+	A research compiler project
+*/
 
+#!language			C;
 #whitespaces		@whitespace ;
 
 @whitespace			' \t\r\n' | "//" !'\n'*
@@ -50,9 +51,22 @@ typedef struct
 } else_info;
 
 #define WITHDEBUG 0
+
+static uchar* my_src;
+#define UNICC_GETINPUT			*( my_src++ )
+
 *] ;
 
-#epilogue	[* *];
+#epilogue	[*
+
+int parse( uchar* src )
+{
+	my_src = src;
+	return _parse( NULL );
+}
+
+*];
+
 
 //Grammar start --------------------------------------------------------------
 
@@ -398,8 +412,7 @@ const_factor<value>	->	const_int
 
 @integer<int>		'0-9'+					[*	char	tmp[64+1];
 												sprintf( tmp, "%.*s", 
-													((int)(@< - @>) > 64 ? 64
-													: (int)(@< - @>) ), @> );
+													@< > 64 ? 64 : @<, @> );
 												@@ = atoi( tmp );
 											*]
 					;
@@ -407,30 +420,25 @@ const_factor<value>	->	const_int
 @float<float>		'0-9'+ '.' '0-9'*
 					| '0-9'* '.' '0-9'+		[*	char	tmp[64+1];
 												sprintf( tmp, "%.*s", 
-													((int)(@< - @>) > 64 ? 64
-													: (int)(@< - @>) ), @> );
+													@< > 64 ? 64 : @<, @> );
 												@@ = atof( tmp );
 											*]
 					;
 					
-@string<uchar*>		'"' ( !'"' | '"' '"' )* '"'
-											[*	int size = (int)(@< - @>);
-												@@ = (uchar*)MALLOC(
-														( size - 1 ) *
-															sizeof( uchar ) );
+@cstring<uchar*>	'"' ( !'"' | '"' '"' )* '"'
+											[*	@@ = (uchar*)MALLOC( ( @< + 1 )
+														* sizeof( uchar ) );
 												sprintf( @@, "%.*s",
-													size - 2, @> + 1 );
+													@< - 2, @> + 1 );
 											*]
 					;
 
 
-@identifier<uchar*>	'A-Za-z_' 'A-Za-z0-9_'*	[*	int size = (int)(@< - @>);
-												@@ = (uchar*)MALLOC(
-														( size + 1 )
-													* sizeof( uchar ) );
+@identifier<uchar*>	'A-Za-z_' 'A-Za-z0-9_'*	[*
+												@@ = (uchar*)MALLOC( ( @< + 1 )
+														* sizeof( uchar ) );
 
-												sprintf( @@, "%.*s",
-													size, @> );
+												sprintf( @@, "%.*s", @<, @> );
 											*]
 					;
 
@@ -442,7 +450,7 @@ const_float<value>	->	@float			[*	@@.type = DT_FLOAT;
 											@@.value._float = @1; *]
 					;
 
-const_str<value>	->	@string			[*	@@.type = DT_STRING;
+const_str<value>	->	@cstring		[*	@@.type = DT_STRING;
 											@@.value._string =
 												put_string( @1 ); *]
 					;

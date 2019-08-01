@@ -197,7 +197,7 @@ int dt_size( short dt )
 		size = (int)sizeof( double );
 	else if( dt == DT_STRING )
 		size = (int)sizeof( char* );
-	printf( "%d = %d\n", dt, size );
+	/* printf( "%d = %d\n", dt, size ); */
 
 	return size;
 }

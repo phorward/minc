@@ -1,12 +1,7 @@
-/*
- * proto.h is a generated file - manual editing is not recommended!
- */
-
-
 /* parse.c */
+int parse( uchar* src );
 
 /* main.c */
-int main( int argc, char** argv );
 
 /* symtab.c */
 symbol* new_symbol( uchar* name, short sym_type );
@@ -43,3 +38,4 @@ void error( int flags, char* fmt, ... );
 /* util.c */
 void* memdup( void* ptr, size_t size );
 uchar* map_file( uchar* path );
+
